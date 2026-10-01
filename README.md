@@ -28,6 +28,12 @@ Copy the three files into the Omarchy bar modules directory:
 cp cava.qml cava.conf cava-popout.conf ~/.config/omarchy/bar/modules/
 ```
 
+Install the EQ TUI (optional, needs Python 3.11+):
+
+```bash
+install -Dm755 omarchy-eq ~/.local/bin/omarchy-eq
+```
+
 Add the module to a bar section in `~/.config/omarchy/shell.json`:
 
 ```json
@@ -44,6 +50,21 @@ omarchy restart shell
 
 Click the visualizer to open the popout. Tune bar count, framerate and
 autosens in `cava.conf` (bar) and `cava-popout.conf` (popout spectrum).
+
+## omarchy-eq TUI
+
+A btop-styled terminal UI for the EasyEffects equalizer, colored from the
+current Omarchy theme (`~/.local/state/omarchy/current/theme/colors.toml`),
+so wallpaper-derived themes restyle it automatically.
+
+- Live spectrum graph (cava raw output)
+- Equalizer band editor: `←/→` select band, `↑/↓` adjust gain, `r` reset
+- `n` next preset, `w` write + apply (`easyeffects -l`), `b` bypass, `q` quit
+
+Bands come from `~/.config/easyeffects/presets/output/*.json` — save one
+preset from the EasyEffects GUI once to bootstrap. Launch it standalone or
+via the popout's **EQ TUI** button (`omarchy-launch-or-focus-tui omarchy-eq`,
+same pattern as the system-monitor widget's btop).
 
 ## License
 

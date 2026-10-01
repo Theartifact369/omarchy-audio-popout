@@ -312,7 +312,18 @@ Item {
         }
 
         Button {
-          text: "Open Equalizer"
+          text: "EQ TUI"
+          foreground: root.fg
+          horizontalPadding: 8
+          verticalPadding: 3
+          iconSize: Style.font.bodySmall
+          fontSize: Style.font.bodySmall
+          onClicked: if (root.bar && root.bar.run)
+            root.bar.run("omarchy-launch-or-focus-tui omarchy-eq")
+        }
+
+        Button {
+          text: "Equalizer"
           foreground: root.fg
           horizontalPadding: 8
           verticalPadding: 3
@@ -410,7 +421,10 @@ Item {
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
               font.bold: true
-              anchors.right: parent.right
+              // Fixed width + right alignment: horizontal anchors are
+              // forbidden inside Row (they break the whole Row layout).
+              width: Style.space(36)
+              horizontalAlignment: Text.AlignRight
               anchors.verticalCenter: parent.verticalCenter
               opacity: streamRow.streamMuted ? 0.5 : 1.0
             }
