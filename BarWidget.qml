@@ -31,8 +31,35 @@ BarWidget {
   readonly property real outputVolume: sink && sink.audio ? sink.audio.volume : 0
   readonly property bool outputMuted: sink && sink.audio ? sink.audio.muted : false
   readonly property string sinkName: sink ? String(sink.description || sink.name || "") : ""
+  // Two surfaces, two roles. The visualizer sits on the bar and takes bar
+  // text; the popout is a popup card, so its contents take the popups surface
+  // roles — a theme is free to set [bar] text and [popups] text differently,
+  // and reading bar.foreground inside the popup would ignore that.
   readonly property color fg: bar ? bar.foreground : Color.foreground
+  readonly property color popFg: Color.popups.text
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+
+  // Spectrum ramp, theme-derived: muted at the floor to accent at the ceiling,
+  // quantised into steps so each bar is an array lookup rather than a per-frame
+  // colour lerp. Quantising also hides the 8-bit rounding stepping you get from
+  // lerping 72 independent bars.
+  readonly property var spectrumPalette: {
+    var steps = 24, out = []
+    for (var i = 0; i < steps; i++) {
+      var t = i / (steps - 1)
+      out.push(Qt.rgba(Color.muted.r + (Color.accent.r - Color.muted.r) * t,
+                       Color.muted.g + (Color.accent.g - Color.muted.g) * t,
+                       Color.muted.b + (Color.accent.b - Color.muted.b) * t, 1))
+    }
+    return out
+  }
+
+  function spectrumColor(level) {
+    var p = root.spectrumPalette
+    if (!p || p.length === 0) return root.popFg
+    var i = Math.floor(level * p.length)
+    return p[i < 0 ? 0 : (i >= p.length ? p.length - 1 : i)]
+  }
   property bool popoutOpen: false
   property int popoutBarCount: 72
   property var popLevels: []
@@ -235,7 +262,11 @@ BarWidget {
         if (m2) root.peakRight = Number(m2[1])
       }
     }
-    onExited: if (code !== 0 && root.popoutOpen) levelProc.running = true
+    // Function form: the shorthand `onExited:` has no `code` in scope, it threw
+    // ReferenceError on every ffmpeg exit and so never restarted the meter.
+    onExited: function(code) {
+      if (code !== 0 && root.popoutOpen) levelProc.running = true
+    }
   }
 
   Process {
@@ -470,7 +501,7 @@ BarWidget {
         PanelSectionHeader {
           id: outputHeader
           text: "OUTPUT"
-          foreground: root.fg
+          foreground: root.popFg
           fontFamily: root.fontFamily
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
@@ -480,7 +511,7 @@ BarWidget {
           id: outputPercent
           textFormat: Text.PlainText
           text: Math.round((outputSlider.dragging ? outputSlider.liveValue : root.outputVolume) * 100) + "%"
-          color: Qt.darker(root.fg, 1.4)
+          color: Qt.darker(root.popFg, 1.4)
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           font.bold: true
@@ -496,7 +527,7 @@ BarWidget {
         visible: root.sinkName !== ""
         width: parent.width
         text: root.sinkName
-        color: Qt.darker(root.fg, 1.5)
+        color: Qt.darker(root.popFg, 1.5)
         font.family: root.fontFamily
         font.pixelSize: Style.font.bodySmall
         elide: Text.ElideRight
@@ -522,7 +553,7 @@ BarWidget {
 
         Button {
           text: root.outputMuted ? "Unmute" : "Mute"
-          foreground: root.fg
+          foreground: root.popFg
           horizontalPadding: 8
           verticalPadding: 3
           iconSize: Style.font.bodySmall
@@ -533,7 +564,7 @@ BarWidget {
         Button {
           text: "Players"
           selected: root.showPlayers
-          foreground: root.fg
+          foreground: root.popFg
           horizontalPadding: 8
           verticalPadding: 3
           iconSize: Style.font.bodySmall
@@ -544,7 +575,7 @@ BarWidget {
         Button {
           text: "Recorders"
           selected: root.showRecorders
-          foreground: root.fg
+          foreground: root.popFg
           horizontalPadding: 8
           verticalPadding: 3
           iconSize: Style.font.bodySmall
@@ -553,19 +584,8 @@ BarWidget {
         }
 
         Button {
-          text: "EQ TUI"
-          foreground: root.fg
-          horizontalPadding: 8
-          verticalPadding: 3
-          iconSize: Style.font.bodySmall
-          fontSize: Style.font.bodySmall
-          onClicked: if (root.bar && root.bar.run)
-            root.bar.run("omarchy-launch-or-focus-tui omarchy-eq")
-        }
-
-        Button {
           text: "EQ GUI"
-          foreground: root.fg
+          foreground: root.popFg
           horizontalPadding: 8
           verticalPadding: 3
           iconSize: Style.font.bodySmall
@@ -583,7 +603,7 @@ BarWidget {
           id: presetPrev
           text: "‹"
           enabled: root.eePresets.length > 0
-          foreground: root.fg
+          foreground: root.popFg
           horizontalPadding: 10
           verticalPadding: 3
           iconSize: Style.font.bodySmall
@@ -597,7 +617,7 @@ BarWidget {
           verticalAlignment: Text.AlignVCenter
           textFormat: Text.PlainText
           text: root.eeCurrent || (root.eePresets.length > 0 ? "—" : "no presets")
-          color: Qt.darker(root.fg, 1.4)
+          color: Qt.darker(root.popFg, 1.4)
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
           font.bold: true
@@ -608,7 +628,7 @@ BarWidget {
         Button {
           text: "›"
           enabled: root.eePresets.length > 0
-          foreground: root.fg
+          foreground: root.popFg
           horizontalPadding: 10
           verticalPadding: 3
           iconSize: Style.font.bodySmall
@@ -619,7 +639,7 @@ BarWidget {
         Button {
           text: "Bypass"
           selected: root.eeBypassed
-          foreground: root.fg
+          foreground: root.popFg
           horizontalPadding: 8
           verticalPadding: 3
           iconSize: Style.font.bodySmall
@@ -632,7 +652,7 @@ BarWidget {
       // apps capturing are not one undifferentiated "STREAMS" pile.
       PanelSeparator {
         visible: root.displaySections.length > 0
-        foreground: root.fg
+        foreground: root.popFg
       }
 
       Repeater {
@@ -645,7 +665,7 @@ BarWidget {
 
           PanelSectionHeader {
             text: modelData.label
-            foreground: root.fg
+            foreground: root.popFg
             fontFamily: root.fontFamily
           }
 
@@ -691,7 +711,7 @@ BarWidget {
                     textFormat: Text.PlainText
                     anchors.centerIn: parent
                     text: streamRow.streamMuted ? "󰝟" : "󰕾"
-                    color: root.fg
+                    color: root.popFg
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.bodySmall
                     visible: !streamIconImage.visible
@@ -708,7 +728,7 @@ BarWidget {
                 Text {
                   textFormat: Text.PlainText
                   text: root.streamLabel(streamRow.node)
-                  color: root.fg
+                  color: root.popFg
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.bodySmall
                   elide: Text.ElideRight
@@ -720,7 +740,7 @@ BarWidget {
                   id: streamPct
                   textFormat: Text.PlainText
                   text: Math.round(streamRow.streamVolume * 100) + "%"
-                  color: Qt.darker(root.fg, 1.5)
+                  color: Qt.darker(root.popFg, 1.5)
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
                   font.bold: true
@@ -754,7 +774,7 @@ BarWidget {
       }
 
       PanelSeparator {
-        foreground: root.fg
+        foreground: root.popFg
       }
 
       // EasyEffects-style spectrum: bottom-anchored bars, blue -> green by
@@ -776,7 +796,7 @@ BarWidget {
               width: (spectrum.width - (root.popoutBarCount - 1) * 2) / root.popoutBarCount
               height: Math.max(2, level * spectrum.height)
               radius: width / 2
-              color: Qt.hsla(0.66 - 0.33 * level, 0.8, 0.55, 1)
+              color: root.spectrumColor(level)
               anchors.bottom: parent.bottom
 
               Behavior on height {
@@ -794,7 +814,7 @@ BarWidget {
         width: parent.width
         horizontalAlignment: Text.AlignRight
         text: root.clockStats
-        color: Qt.darker(root.fg, 1.5)
+        color: Qt.darker(root.popFg, 1.5)
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
         font.bold: true
