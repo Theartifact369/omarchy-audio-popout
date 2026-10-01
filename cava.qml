@@ -35,7 +35,7 @@ Item {
   readonly property color fg: bar ? bar.foreground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   property bool popoutOpen: false
-  property int popoutBarCount: 56
+  property int popoutBarCount: 72
   property var popLevels: []
   // Conf paths resolve next to this file, so the module is location-independent.
   readonly property string barConfPath: decodeURIComponent(String(Qt.resolvedUrl("cava.conf")).replace(/^file:\/\//, ""))
@@ -291,7 +291,7 @@ Item {
     owner: root
     bar: root.bar
     open: root.popoutOpen
-    contentWidth: popout.fittedContentWidth(Style.space(360))
+    contentWidth: popout.fittedContentWidth(Style.space(460))
     contentHeight: popout.fittedContentHeight(popoutColumn.implicitHeight)
 
     Column {
@@ -534,7 +534,7 @@ Item {
       Item {
         id: spectrum
         width: parent.width
-        height: Style.space(96)
+        height: Style.space(128)
 
         Row {
           anchors.fill: parent
