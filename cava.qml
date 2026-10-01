@@ -172,6 +172,61 @@ Item {
     }
   }
 
+  // EasyEffects: EE 8 has no live control API (all state lives in preset
+  // files), so its CLI is the whole control surface — -l loads a preset,
+  // -b 1/-b 2 set global bypass, -b 3 reads it back. Preset names come from
+  // the files themselves; -p prints a list whose format isn't worth parsing.
+  property var eePresets: []
+  property string eeCurrent: ""
+  property bool eeBypassed: false
+
+  function loadPreset(name) {
+    if (!name) return
+    eePresetProc.command = ["sh", "-c", "easyeffects -l '" + name.replace(/'/g, "'\\''") + "' >/dev/null 2>&1"]
+    eePresetProc.running = true
+    eeCurrent = name
+  }
+
+  function stepPreset(delta) {
+    if (eePresets.length === 0) return
+    var i = eePresets.indexOf(eeCurrent)
+    if (i < 0) i = delta > 0 ? -1 : 0
+    loadPreset(eePresets[(i + delta + eePresets.length) % eePresets.length])
+  }
+
+  Process {
+    id: eeStateProc
+    running: root.popoutOpen
+    command: ["sh", "-c",
+      "easyeffects -s 2>/dev/null | sed 's/^/S:/'"
+      + "; easyeffects -b 3 2>/dev/null | sed 's/^/B:/'"
+      + "; ls -1 ~/.config/easyeffects/presets/output/ 2>/dev/null | sed 's/^/P:/'"]
+    stdout: SplitParser {
+      onRead: function(line) {
+        var m
+        if ((m = String(line).match(/^S:output:\s*(.*)$/))) root.eeCurrent = String(m[1]).trim()
+        else if ((m = String(line).match(/^B:(\d+)$/))) root.eeBypassed = m[1] === "1"
+        else if ((m = String(line).match(/^P:(.+)\.json$/))) root.eePresets = root.eePresets.concat([String(m[1])])
+      }
+    }
+  }
+
+  Process {
+    id: eeBypassProc
+    command: ["sh", "-c", "easyeffects --bypass-toggle >/dev/null 2>&1; easyeffects -b 3 2>/dev/null"]
+    stdout: SplitParser {
+      onRead: function(line) {
+        var t = String(line).trim()
+        if (t === "1") root.eeBypassed = true
+        else if (t === "2") root.eeBypassed = false
+      }
+    }
+  }
+
+  Process {
+    id: eePresetProc
+  }
+
   function streamLabel(node) {
     if (!node) return ""
     var p = node.ready && node.properties ? node.properties : {}
@@ -436,6 +491,60 @@ Item {
           iconSize: Style.font.bodySmall
           fontSize: Style.font.bodySmall
           onClicked: eqProc.running = true
+        }
+      }
+
+      // EasyEffects row: output preset cycling + global bypass (EE's CLI is
+      // the only control surface it has).
+      Row {
+        spacing: Style.space(6)
+
+        Button {
+          id: presetPrev
+          text: "‹"
+          enabled: root.eePresets.length > 0
+          foreground: root.fg
+          horizontalPadding: 10
+          verticalPadding: 3
+          iconSize: Style.font.bodySmall
+          fontSize: Style.font.bodySmall
+          onClicked: root.stepPreset(-1)
+        }
+
+        Text {
+          width: Style.space(130)
+          height: presetPrev.height
+          verticalAlignment: Text.AlignVCenter
+          textFormat: Text.PlainText
+          text: root.eeCurrent || (root.eePresets.length > 0 ? "—" : "no presets")
+          color: Qt.darker(root.fg, 1.4)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          font.bold: true
+          horizontalAlignment: Text.AlignHCenter
+          elide: Text.ElideRight
+        }
+
+        Button {
+          text: "›"
+          enabled: root.eePresets.length > 0
+          foreground: root.fg
+          horizontalPadding: 10
+          verticalPadding: 3
+          iconSize: Style.font.bodySmall
+          fontSize: Style.font.bodySmall
+          onClicked: root.stepPreset(1)
+        }
+
+        Button {
+          text: "Bypass"
+          selected: root.eeBypassed
+          foreground: root.fg
+          horizontalPadding: 8
+          verticalPadding: 3
+          iconSize: Style.font.bodySmall
+          fontSize: Style.font.bodySmall
+          onClicked: root.eeBypassProc.running = true
         }
       }
 

@@ -12,6 +12,9 @@ A [cava](https://github.com/karlstav/cava) audio visualizer module for the
 - **Mute / EQ TUI / EQ GUI** buttons (the TUI launches in your terminal via
   `omarchy-launch-or-focus-tui`, the GUI button opens
   [EasyEffects](https://github.com/wwmm/easyeffects) for system-wide EQ)
+- **EasyEffects row** — output-preset cycling (`‹` / `›`) and a global
+  **Bypass** toggle, driven through the `easyeffects` CLI, since EasyEffects 8
+  exposes no live control API (all state lives in preset files)
 - **Status readout** — kHz · ms · dB (graph clock via `pw-metadata`, dB from
   sink volume), EasyEffects-statusbar-style, bottom-right
 - **72-bar spectrum analyzer** — a second, denser cava instance that only
