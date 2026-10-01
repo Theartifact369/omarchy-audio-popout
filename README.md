@@ -5,7 +5,8 @@ A [cava](https://github.com/karlstav/cava) audio visualizer module for the
 
 - **Volume slider** for the default sink (drag, wheel; right-click mutes)
 - **Per-app volume** — connected players (Spotify, Zen, ...) each get a
-  slider + mute under the output controls
+  slider + mute under the output controls, with the app's own icon
+  (resolved via desktop entries / icon theme)
 - **Mute / Open Equalizer** buttons (launches
   [EasyEffects](https://github.com/wwmm/easyeffects) for system-wide EQ)
 - **56-bar spectrum analyzer** — a second, denser cava instance that only

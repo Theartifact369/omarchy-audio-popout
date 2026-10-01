@@ -90,6 +90,41 @@ Item {
     return p["application.name"] || node.description || p["media.name"] || node.name || ""
   }
 
+  function iconUrl(icon) {
+    var value = String(icon || "")
+    if (!value) return ""
+    if (value.indexOf("file://") === 0 || value.indexOf("image://") === 0) return value
+    if (value.charAt(0) === "/") return Util.fileUrl(value)
+    var themed = Quickshell.iconPath(value, true)
+    return themed && themed.length > 0 ? themed : ""
+  }
+
+  // Stream icon: match the app against desktop entries (id or name) and use
+  // the entry's icon (themed name or absolute path, e.g. Zen's), falling back
+  // to a themed lookup on the app/node name.
+  function streamIcon(node) {
+    var p = node && node.ready && node.properties ? node.properties : {}
+    var names = []
+    if (p["application.name"]) names.push(String(p["application.name"]))
+    if (node && node.name) names.push(String(node.name))
+    var values = DesktopEntries.applications.values || []
+    for (var i = 0; i < names.length; i++) {
+      var key = names[i].toLowerCase()
+      for (var j = 0; j < values.length; j++) {
+        var e = values[j]
+        if (String(e.id || "").toLowerCase() === key || String(e.name || "").toLowerCase() === key) {
+          var url = iconUrl(e.icon)
+          if (url) return url
+        }
+      }
+    }
+    for (var k = 0; k < names.length; k++) {
+      var themed = Quickshell.iconPath(names[k].toLowerCase(), true)
+      if (themed && themed.length > 0) return themed
+    }
+    return ""
+  }
+
   PwObjectTracker {
     objects: root.audioStreams
   }
@@ -312,20 +347,41 @@ Item {
           readonly property var node: modelData
           readonly property real streamVolume: node && node.audio ? node.audio.volume : 0
           readonly property bool streamMuted: node && node.audio ? node.audio.muted : false
+          readonly property string iconSource: root.streamIcon(node)
 
           Row {
             width: parent.width
             spacing: Style.space(6)
 
-            Text {
-              id: streamMuteIcon
-              textFormat: Text.PlainText
-              text: streamRow.streamMuted ? "󰝟" : "󰕾"
-              color: root.fg
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              opacity: streamRow.streamMuted ? 0.5 : 1.0
+            // App icon (desktop entry match, themed fallback); falls back to
+            // a speaker glyph when neither resolves. Click toggles mute.
+            Item {
+              id: streamIconSlot
+              width: Style.space(20)
+              height: Style.space(20)
               anchors.verticalCenter: parent.verticalCenter
+              opacity: streamRow.streamMuted ? 0.5 : 1.0
+
+              Image {
+                id: streamIconImage
+                anchors.fill: parent
+                fillMode: Image.PreserveAspectFit
+                sourceSize.width: width * Screen.devicePixelRatio
+                sourceSize.height: height * Screen.devicePixelRatio
+                source: streamRow.iconSource
+                asynchronous: true
+                visible: streamRow.iconSource !== "" && status !== Image.Error
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                anchors.centerIn: parent
+                text: streamRow.streamMuted ? "󰝟" : "󰕾"
+                color: root.fg
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                visible: !streamIconImage.visible
+              }
 
               MouseArea {
                 anchors.fill: parent
@@ -342,7 +398,7 @@ Item {
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
               elide: Text.ElideRight
-              width: parent.width - streamMuteIcon.width - streamPct.width - Style.space(12)
+              width: parent.width - streamIconSlot.width - streamPct.width - Style.space(12)
               anchors.verticalCenter: parent.verticalCenter
             }
 
