@@ -4,16 +4,17 @@ A [cava](https://github.com/karlstav/cava) audio visualizer module for the
 [Omarchy](https://omarchy.org) shell's bar, with a click-open popout:
 
 - **Volume slider** for the default sink (drag, wheel; right-click mutes)
-- **Per-app volume** — connected players (Spotify, Zen, ...) each get a
-  slider + mute under the output controls, with the app's own icon
-  (resolved via desktop entries / icon theme). **Players** / **Recorders**
-  toggle buttons switch which side shows
+- **Per-app volume** — every connected app stream gets a slider + mute row,
+  with the app's own icon (resolved via desktop entries / icon theme)
+- **Players / Recorders toggles** — Players lists playback streams (Spotify,
+  Zen, ...); Recorders lists recording inputs (mics, line-ins) first, then the
+  apps currently capturing (OBS and friends) — both with volume + mute
 - **Mute / EQ TUI / EQ GUI** buttons (the TUI launches in your terminal via
   `omarchy-launch-or-focus-tui`, the GUI button opens
   [EasyEffects](https://github.com/wwmm/easyeffects) for system-wide EQ)
 - **Status readout** — kHz · ms · dB (graph clock via `pw-metadata`, dB from
   sink volume), EasyEffects-statusbar-style, bottom-right
-- **56-bar spectrum analyzer** — a second, denser cava instance that only
+- **72-bar spectrum analyzer** — a second, denser cava instance that only
   runs while the popout is open
 - Scrolling over the bar visualizer adjusts volume without opening the popout
 

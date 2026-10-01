@@ -60,28 +60,60 @@ Item {
   property bool showPlayers: true
   property bool showRecorders: false
 
+  function mediaClass(n) {
+    var p = n && n.ready && n.properties ? n.properties : {}
+    return String(p["media.class"] || "")
+  }
+
+  // Direction comes from media.class — PwNode.type is a numeric enum
+  // (PwNode.AudioSource etc.), not a string, so don't match on it for streams.
   function isPlayerStream(n) {
-    if (!n || !n.isStream) return false
-    if (n.isSink === true) return true
-    var t = String(n.type || "")
-    return t.indexOf("Stream/Output/Audio") !== -1
-      || t.indexOf("AudioOutStream") !== -1
-      || t.indexOf("Output") !== -1
+    if (!n || n.isStream !== true) return false
+    return mediaClass(n).indexOf("Stream/Output") === 0
   }
 
   function isRecorderStream(n) {
-    if (!n || !n.isStream || isPlayerStream(n)) return false
-    return n.isSource === true || String(n.type || "").indexOf("Input") !== -1
+    if (!n || n.isStream !== true || isPlayerStream(n)) return false
+    if (String(n.name || "") === "cava") return false // our own spectrum captures
+    return mediaClass(n).indexOf("Stream/Input") === 0
   }
 
-  function appStreams(category) {
+  // Recording inputs: hardware mics / line-ins. These are device nodes, not
+  // streams, so they carry no media.class — the PwNode enum is all we get.
+  readonly property var inputDevices: {
     var list = []
     var nodes = Pipewire.nodes ? Pipewire.nodes.values : []
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i]
-      if (!n) continue
-      if (category === "players" ? !isPlayerStream(n) : !isRecorderStream(n)) continue
+      if (!n || n.isStream === true || n.type !== PwNode.AudioSource) continue
       if (String(n.name || "").indexOf("omarchy_speaker_tuning") === 0) continue
+      if (!n.audio) continue
+      list.push(n)
+    }
+    return list
+  }
+
+  // All app streams in one tracker: nothing else in the shell tracks capture
+  // streams, and tracking is what gives the rows live volume control. The
+  // players/recorders split happens after this, on media.class.
+  readonly property var trackedStreams: {
+    var list = []
+    var nodes = Pipewire.nodes ? Pipewire.nodes.values : []
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i]
+      if (!n || !n.isStream) continue
+      if (String(n.name || "").indexOf("omarchy_speaker_tuning") === 0) continue
+      list.push(n)
+    }
+    return list
+  }
+
+  function appStreams(category) {
+    var list = []
+    var nodes = root.trackedStreams
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i]
+      if (category === "players" ? !isPlayerStream(n) : !isRecorderStream(n)) continue
       if (!n.audio) continue
       list.push(n)
     }
@@ -95,7 +127,7 @@ Item {
   function refreshStreams() {
     var list = []
     if (showPlayers) list = list.concat(playerStreams)
-    if (showRecorders) list = list.concat(recorderStreams)
+    if (showRecorders) list = list.concat(inputDevices, recorderStreams)
     displayStreams = list
   }
 
@@ -107,13 +139,10 @@ Item {
   onShowRecordersChanged: if (popoutOpen) refreshStreams()
   onPlayerStreamsChanged: if (popoutOpen) streamsRefreshTimer.restart()
   onRecorderStreamsChanged: if (popoutOpen) streamsRefreshTimer.restart()
+  onInputDevicesChanged: if (popoutOpen) streamsRefreshTimer.restart()
 
   PwObjectTracker {
-    objects: root.playerStreams
-  }
-
-  PwObjectTracker {
-    objects: root.recorderStreams
+    objects: root.trackedStreams
   }
 
   // dB/kHz/ms readout, EasyEffects-style. dB is sink volume math; kHz + ms
