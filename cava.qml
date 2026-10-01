@@ -53,36 +53,95 @@ Item {
     if (sink && sink.audio) sink.audio.muted = !sink.audio.muted
   }
 
-  // Playback app streams (Spotify, Zen, ...). The live list only feeds the
-  // tracker; the Repeater gets snapshots via a timer — rebuilding a Repeater
-  // straight off the live PipeWire model on node removal has crashed
-  // Quickshell's Pipewire service (see the audio panel's notes).
-  readonly property var audioStreams: {
+  // App streams (Spotify, Zen, ...). The live lists only feed the trackers;
+  // the Repeater gets snapshots via a timer — rebuilding a Repeater straight
+  // off the live PipeWire model on node removal has crashed Quickshell's
+  // Pipewire service (see the audio panel's notes).
+  property bool showPlayers: true
+  property bool showRecorders: false
+
+  function isPlayerStream(n) {
+    if (!n || !n.isStream) return false
+    if (n.isSink === true) return true
+    var t = String(n.type || "")
+    return t.indexOf("Stream/Output/Audio") !== -1
+      || t.indexOf("AudioOutStream") !== -1
+      || t.indexOf("Output") !== -1
+  }
+
+  function isRecorderStream(n) {
+    if (!n || !n.isStream || isPlayerStream(n)) return false
+    return n.isSource === true || String(n.type || "").indexOf("Input") !== -1
+  }
+
+  function appStreams(category) {
     var list = []
     var nodes = Pipewire.nodes ? Pipewire.nodes.values : []
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i]
-      if (!n || !n.isStream) continue
-      var type = String(n.type || "")
-      if (n.isSink !== true && type.indexOf("Stream/Output/Audio") === -1
-          && type.indexOf("AudioOutStream") === -1 && type.indexOf("Output") === -1) continue
+      if (!n) continue
+      if (category === "players" ? !isPlayerStream(n) : !isRecorderStream(n)) continue
       if (String(n.name || "").indexOf("omarchy_speaker_tuning") === 0) continue
       if (!n.audio) continue
       list.push(n)
     }
     return list
   }
+
+  readonly property var playerStreams: appStreams("players")
+  readonly property var recorderStreams: appStreams("recorders")
   property var displayStreams: []
 
   function refreshStreams() {
-    displayStreams = audioStreams.slice()
+    var list = []
+    if (showPlayers) list = list.concat(playerStreams)
+    if (showRecorders) list = list.concat(recorderStreams)
+    displayStreams = list
   }
 
   onPopoutOpenChanged: {
     if (popoutOpen) refreshStreams()
     else displayStreams = []
   }
-  onAudioStreamsChanged: if (popoutOpen) streamsRefreshTimer.restart()
+  onShowPlayersChanged: if (popoutOpen) refreshStreams()
+  onShowRecordersChanged: if (popoutOpen) refreshStreams()
+  onPlayerStreamsChanged: if (popoutOpen) streamsRefreshTimer.restart()
+  onRecorderStreamsChanged: if (popoutOpen) streamsRefreshTimer.restart()
+
+  PwObjectTracker {
+    objects: root.playerStreams
+  }
+
+  PwObjectTracker {
+    objects: root.recorderStreams
+  }
+
+  // dB/kHz/ms readout, EasyEffects-style. dB is sink volume math; kHz + ms
+  // come from pw-metadata's graph clock (rate/quantum), read once per open —
+  // switching output devices mid-open shows stale numbers until reopened.
+  property real clockRate: 0
+  property real clockQuantum: 0
+  readonly property string sinkDb: !sink || !sink.audio || sink.audio.muted || outputVolume <= 0.0001
+    ? "-∞ dB"
+    : (20 * Math.log(outputVolume) / Math.LN10).toFixed(1) + " dB"
+  readonly property string clockStats: clockRate > 0
+    ? (clockRate / 1000).toFixed(1) + " kHz · "
+      + (clockQuantum / clockRate * 1000).toFixed(1) + " ms · " + sinkDb
+    : sinkDb
+
+  Process {
+    id: pwMeta
+    command: ["sh", "-c", "pw-metadata -n settings 2>/dev/null || true"]
+    running: root.popoutOpen
+    stdout: SplitParser {
+      onRead: function(line) {
+        var m = String(line).match(/key:'clock\.rate' value:'(\d+)'/)
+        if (m) root.clockRate = Number(m[1])
+        var q = String(line).match(/key:'clock\.quantum' value:'(\d+)'/)
+        if (q) root.clockQuantum = Number(q[1])
+      }
+    }
+  }
 
   function streamLabel(node) {
     if (!node) return ""
@@ -123,10 +182,6 @@ Item {
       if (themed && themed.length > 0) return themed
     }
     return ""
-  }
-
-  PwObjectTracker {
-    objects: root.audioStreams
   }
 
   Timer {
@@ -236,7 +291,7 @@ Item {
     owner: root
     bar: root.bar
     open: root.popoutOpen
-    contentWidth: popout.fittedContentWidth(Style.space(300))
+    contentWidth: popout.fittedContentWidth(Style.space(360))
     contentHeight: popout.fittedContentHeight(popoutColumn.implicitHeight)
 
     Column {
@@ -312,6 +367,28 @@ Item {
         }
 
         Button {
+          text: "Players"
+          selected: root.showPlayers
+          foreground: root.fg
+          horizontalPadding: 8
+          verticalPadding: 3
+          iconSize: Style.font.bodySmall
+          fontSize: Style.font.bodySmall
+          onClicked: root.showPlayers = !root.showPlayers
+        }
+
+        Button {
+          text: "Recorders"
+          selected: root.showRecorders
+          foreground: root.fg
+          horizontalPadding: 8
+          verticalPadding: 3
+          iconSize: Style.font.bodySmall
+          fontSize: Style.font.bodySmall
+          onClicked: root.showRecorders = !root.showRecorders
+        }
+
+        Button {
           text: "EQ TUI"
           foreground: root.fg
           horizontalPadding: 8
@@ -323,7 +400,7 @@ Item {
         }
 
         Button {
-          text: "Equalizer"
+          text: "EQ GUI"
           foreground: root.fg
           horizontalPadding: 8
           verticalPadding: 3
@@ -480,6 +557,18 @@ Item {
             }
           }
         }
+      }
+
+      // EasyEffects-style status readout, bottom-right: kHz · ms · dB.
+      Text {
+        textFormat: Text.PlainText
+        width: parent.width
+        horizontalAlignment: Text.AlignRight
+        text: root.clockStats
+        color: Qt.darker(root.fg, 1.5)
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        font.bold: true
       }
 
     }

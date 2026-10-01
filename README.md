@@ -6,9 +6,13 @@ A [cava](https://github.com/karlstav/cava) audio visualizer module for the
 - **Volume slider** for the default sink (drag, wheel; right-click mutes)
 - **Per-app volume** — connected players (Spotify, Zen, ...) each get a
   slider + mute under the output controls, with the app's own icon
-  (resolved via desktop entries / icon theme)
-- **Mute / Open Equalizer** buttons (launches
+  (resolved via desktop entries / icon theme). **Players** / **Recorders**
+  toggle buttons switch which side shows
+- **Mute / EQ TUI / EQ GUI** buttons (the TUI launches in your terminal via
+  `omarchy-launch-or-focus-tui`, the GUI button opens
   [EasyEffects](https://github.com/wwmm/easyeffects) for system-wide EQ)
+- **Status readout** — kHz · ms · dB (graph clock via `pw-metadata`, dB from
+  sink volume), EasyEffects-statusbar-style, bottom-right
 - **56-bar spectrum analyzer** — a second, denser cava instance that only
   runs while the popout is open
 - Scrolling over the bar visualizer adjusts volume without opening the popout
