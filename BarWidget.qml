@@ -121,18 +121,24 @@ BarWidget {
 
   readonly property var playerStreams: appStreams("players")
   readonly property var recorderStreams: appStreams("recorders")
-  property var displayStreams: []
+  // One entry per visible list, each with its own header: players, recording
+  // inputs (mics / line-ins), then the apps currently capturing.
+  property var displaySections: []
 
   function refreshStreams() {
-    var list = []
-    if (showPlayers) list = list.concat(playerStreams)
-    if (showRecorders) list = list.concat(inputDevices, recorderStreams)
-    displayStreams = list
+    var sections = []
+    if (showPlayers && playerStreams.length > 0)
+      sections.push({ label: "PLAYERS", items: playerStreams.slice() })
+    if (showRecorders && inputDevices.length > 0)
+      sections.push({ label: "RECORDING INPUTS", items: inputDevices.slice() })
+    if (showRecorders && recorderStreams.length > 0)
+      sections.push({ label: "RECORDERS", items: recorderStreams.slice() })
+    displaySections = sections
   }
 
   onPopoutOpenChanged: {
     if (popoutOpen) refreshStreams()
-    else displayStreams = []
+    else displaySections = []
   }
   onShowPlayersChanged: if (popoutOpen) refreshStreams()
   onShowRecordersChanged: if (popoutOpen) refreshStreams()
@@ -547,117 +553,127 @@ BarWidget {
         }
       }
 
-      // Connected players (output app streams): name, per-app volume, mute.
+      // Each list gets its own header, so the inputs you record from and the
+      // apps capturing are not one undifferentiated "STREAMS" pile.
       PanelSeparator {
-        visible: root.displayStreams.length > 0
+        visible: root.displaySections.length > 0
         foreground: root.fg
-      }
-
-      PanelSectionHeader {
-        visible: root.displayStreams.length > 0
-        text: "STREAMS"
-        foreground: root.fg
-        fontFamily: root.fontFamily
       }
 
       Repeater {
-        model: root.displayStreams
+        model: root.displaySections
 
         delegate: Column {
-          id: streamRow
           required property var modelData
           width: parent.width
-          spacing: Style.space(2)
+          spacing: Style.space(8)
 
-          readonly property var node: modelData
-          readonly property real streamVolume: node && node.audio ? node.audio.volume : 0
-          readonly property bool streamMuted: node && node.audio ? node.audio.muted : false
-          readonly property string iconSource: root.streamIcon(node)
-
-          Row {
-            width: parent.width
-            spacing: Style.space(6)
-
-            // App icon (desktop entry match, themed fallback); falls back to
-            // a speaker glyph when neither resolves. Click toggles mute.
-            Item {
-              id: streamIconSlot
-              width: Style.space(20)
-              height: Style.space(20)
-              anchors.verticalCenter: parent.verticalCenter
-              opacity: streamRow.streamMuted ? 0.5 : 1.0
-
-              Image {
-                id: streamIconImage
-                anchors.fill: parent
-                fillMode: Image.PreserveAspectFit
-                sourceSize.width: width * Screen.devicePixelRatio
-                sourceSize.height: height * Screen.devicePixelRatio
-                source: streamRow.iconSource
-                asynchronous: true
-                visible: streamRow.iconSource !== "" && status !== Image.Error
-              }
-
-              Text {
-                textFormat: Text.PlainText
-                anchors.centerIn: parent
-                text: streamRow.streamMuted ? "󰝟" : "󰕾"
-                color: root.fg
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
-                visible: !streamIconImage.visible
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: if (streamRow.node && streamRow.node.audio)
-                  streamRow.node.audio.muted = !streamRow.node.audio.muted
-              }
-            }
-
-            Text {
-              textFormat: Text.PlainText
-              text: root.streamLabel(streamRow.node)
-              color: root.fg
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              elide: Text.ElideRight
-              width: parent.width - streamIconSlot.width - streamPct.width - Style.space(12)
-              anchors.verticalCenter: parent.verticalCenter
-            }
-
-            Text {
-              id: streamPct
-              textFormat: Text.PlainText
-              text: Math.round(streamRow.streamVolume * 100) + "%"
-              color: Qt.darker(root.fg, 1.5)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              // Fixed width + right alignment: horizontal anchors are
-              // forbidden inside Row (they break the whole Row layout).
-              width: Style.space(36)
-              horizontalAlignment: Text.AlignRight
-              anchors.verticalCenter: parent.verticalCenter
-              opacity: streamRow.streamMuted ? 0.5 : 1.0
-            }
+          PanelSectionHeader {
+            text: modelData.label
+            foreground: root.fg
+            fontFamily: root.fontFamily
           }
 
-          PanelSlider {
-            bar: root.bar
-            width: parent.width
-            minimum: 0
-            maximum: 1.5
-            step: 0.05
-            value: streamRow.streamVolume
-            opacity: streamRow.streamMuted ? 0.5 : 1.0
+          Repeater {
+            model: modelData.items
 
-            onMoved: function(v) {
-              if (streamRow.node && streamRow.node.audio) streamRow.node.audio.volume = v
+            delegate: Column {
+              id: streamRow
+              required property var modelData
+              width: parent.width
+              spacing: Style.space(2)
+
+              readonly property var node: modelData
+              readonly property real streamVolume: node && node.audio ? node.audio.volume : 0
+              readonly property bool streamMuted: node && node.audio ? node.audio.muted : false
+              readonly property string iconSource: root.streamIcon(node)
+
+              Row {
+                width: parent.width
+                spacing: Style.space(6)
+
+                // App icon (desktop entry match, themed fallback); falls back to
+                // a speaker glyph when neither resolves. Click toggles mute.
+                Item {
+                  id: streamIconSlot
+                  width: Style.space(20)
+                  height: Style.space(20)
+                  anchors.verticalCenter: parent.verticalCenter
+                  opacity: streamRow.streamMuted ? 0.5 : 1.0
+
+                  Image {
+                    id: streamIconImage
+                    anchors.fill: parent
+                    fillMode: Image.PreserveAspectFit
+                    sourceSize.width: width * Screen.devicePixelRatio
+                    sourceSize.height: height * Screen.devicePixelRatio
+                    source: streamRow.iconSource
+                    asynchronous: true
+                    visible: streamRow.iconSource !== "" && status !== Image.Error
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    anchors.centerIn: parent
+                    text: streamRow.streamMuted ? "󰝟" : "󰕾"
+                    color: root.fg
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    visible: !streamIconImage.visible
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: if (streamRow.node && streamRow.node.audio)
+                      streamRow.node.audio.muted = !streamRow.node.audio.muted
+                  }
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: root.streamLabel(streamRow.node)
+                  color: root.fg
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  elide: Text.ElideRight
+                  width: parent.width - streamIconSlot.width - streamPct.width - Style.space(12)
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                  id: streamPct
+                  textFormat: Text.PlainText
+                  text: Math.round(streamRow.streamVolume * 100) + "%"
+                  color: Qt.darker(root.fg, 1.5)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                  // Fixed width + right alignment: horizontal anchors are
+                  // forbidden inside Row (they break the whole Row layout).
+                  width: Style.space(36)
+                  horizontalAlignment: Text.AlignRight
+                  anchors.verticalCenter: parent.verticalCenter
+                  opacity: streamRow.streamMuted ? 0.5 : 1.0
+                }
             }
-            onRightClicked: if (streamRow.node && streamRow.node.audio)
-              streamRow.node.audio.muted = !streamRow.node.audio.muted
+
+            PanelSlider {
+              bar: root.bar
+              width: parent.width
+              minimum: 0
+              maximum: 1.5
+              step: 0.05
+              value: streamRow.streamVolume
+              opacity: streamRow.streamMuted ? 0.5 : 1.0
+
+              onMoved: function(v) {
+                if (streamRow.node && streamRow.node.audio) streamRow.node.audio.volume = v
+              }
+              onRightClicked: if (streamRow.node && streamRow.node.audio)
+                streamRow.node.audio.muted = !streamRow.node.audio.muted
+            }
+            }
           }
         }
       }

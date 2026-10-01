@@ -7,9 +7,10 @@ click for the full audio panel.
 - **Volume slider** for the default sink (drag, wheel; right-click mutes)
 - **Per-app volume** — every connected app stream gets a slider + mute row,
   with the app's own icon (resolved via desktop entries / icon theme)
-- **Players / Recorders toggles** — Players lists playback streams (Spotify,
-  Zen, ...); Recorders lists recording inputs (mics, line-ins) first, then the
-  apps currently capturing (OBS and friends) — both with volume + mute
+- **Players / Recorders toggles** — each list gets its own header:
+  **PLAYERS** for playback streams (Spotify, Zen, ...), **RECORDING INPUTS**
+  for mics and line-ins, **RECORDERS** for the apps currently capturing
+  (OBS and friends) — every row has volume + mute
 - **Mute / EQ TUI / EQ GUI** buttons (the TUI launches in your terminal via
   `omarchy-launch-or-focus-tui`, the GUI button opens
   [EasyEffects](https://github.com/wwmm/easyeffects) for system-wide EQ)
