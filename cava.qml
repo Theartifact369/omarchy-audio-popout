@@ -53,6 +53,53 @@ Item {
     if (sink && sink.audio) sink.audio.muted = !sink.audio.muted
   }
 
+  // Playback app streams (Spotify, Zen, ...). The live list only feeds the
+  // tracker; the Repeater gets snapshots via a timer — rebuilding a Repeater
+  // straight off the live PipeWire model on node removal has crashed
+  // Quickshell's Pipewire service (see the audio panel's notes).
+  readonly property var audioStreams: {
+    var list = []
+    var nodes = Pipewire.nodes ? Pipewire.nodes.values : []
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i]
+      if (!n || !n.isStream) continue
+      var type = String(n.type || "")
+      if (n.isSink !== true && type.indexOf("Stream/Output/Audio") === -1
+          && type.indexOf("AudioOutStream") === -1 && type.indexOf("Output") === -1) continue
+      if (String(n.name || "").indexOf("omarchy_speaker_tuning") === 0) continue
+      if (!n.audio) continue
+      list.push(n)
+    }
+    return list
+  }
+  property var displayStreams: []
+
+  function refreshStreams() {
+    displayStreams = audioStreams.slice()
+  }
+
+  onPopoutOpenChanged: {
+    if (popoutOpen) refreshStreams()
+    else displayStreams = []
+  }
+  onAudioStreamsChanged: if (popoutOpen) streamsRefreshTimer.restart()
+
+  function streamLabel(node) {
+    if (!node) return ""
+    var p = node.ready && node.properties ? node.properties : {}
+    return p["application.name"] || node.description || p["media.name"] || node.name || ""
+  }
+
+  PwObjectTracker {
+    objects: root.audioStreams
+  }
+
+  Timer {
+    id: streamsRefreshTimer
+    interval: 75
+    onTriggered: root.refreshStreams()
+  }
+
   implicitWidth: barCount * (barWidth + gap) - gap
   implicitHeight: bar ? bar.barSize : 30
 
@@ -237,6 +284,97 @@ Item {
           iconSize: Style.font.bodySmall
           fontSize: Style.font.bodySmall
           onClicked: eqProc.running = true
+        }
+      }
+
+      // Connected players (output app streams): name, per-app volume, mute.
+      PanelSeparator {
+        visible: root.displayStreams.length > 0
+        foreground: root.fg
+      }
+
+      PanelSectionHeader {
+        visible: root.displayStreams.length > 0
+        text: "STREAMS"
+        foreground: root.fg
+        fontFamily: root.fontFamily
+      }
+
+      Repeater {
+        model: root.displayStreams
+
+        delegate: Column {
+          id: streamRow
+          required property var modelData
+          width: parent.width
+          spacing: Style.space(2)
+
+          readonly property var node: modelData
+          readonly property real streamVolume: node && node.audio ? node.audio.volume : 0
+          readonly property bool streamMuted: node && node.audio ? node.audio.muted : false
+
+          Row {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Text {
+              id: streamMuteIcon
+              textFormat: Text.PlainText
+              text: streamRow.streamMuted ? "󰝟" : "󰕾"
+              color: root.fg
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              opacity: streamRow.streamMuted ? 0.5 : 1.0
+              anchors.verticalCenter: parent.verticalCenter
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: if (streamRow.node && streamRow.node.audio)
+                  streamRow.node.audio.muted = !streamRow.node.audio.muted
+              }
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              text: root.streamLabel(streamRow.node)
+              color: root.fg
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              elide: Text.ElideRight
+              width: parent.width - streamMuteIcon.width - streamPct.width - Style.space(12)
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Text {
+              id: streamPct
+              textFormat: Text.PlainText
+              text: Math.round(streamRow.streamVolume * 100) + "%"
+              color: Qt.darker(root.fg, 1.5)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              opacity: streamRow.streamMuted ? 0.5 : 1.0
+            }
+          }
+
+          PanelSlider {
+            bar: root.bar
+            width: parent.width
+            minimum: 0
+            maximum: 1.5
+            step: 0.05
+            value: streamRow.streamVolume
+            opacity: streamRow.streamMuted ? 0.5 : 1.0
+
+            onMoved: function(v) {
+              if (streamRow.node && streamRow.node.audio) streamRow.node.audio.volume = v
+            }
+            onRightClicked: if (streamRow.node && streamRow.node.audio)
+              streamRow.node.audio.muted = !streamRow.node.audio.muted
+          }
         }
       }
 
