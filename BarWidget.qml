@@ -137,9 +137,14 @@ BarWidget {
   }
 
   onPopoutOpenChanged: {
-    if (popoutOpen) refreshStreams()
-    else displaySections = []
+    if (popoutOpen) {
+      refreshStreams()
+      refreshClock()
+    } else {
+      displaySections = []
+    }
   }
+  onSinkChanged: if (popoutOpen) refreshClock()
   onShowPlayersChanged: if (popoutOpen) refreshStreams()
   onShowRecordersChanged: if (popoutOpen) refreshStreams()
   onPlayerStreamsChanged: if (popoutOpen) streamsRefreshTimer.restart()
@@ -150,9 +155,10 @@ BarWidget {
     objects: root.trackedStreams
   }
 
-  // dB/kHz/ms readout, EasyEffects-style. dB is sink volume math; kHz + ms
-  // come from pw-metadata's graph clock (rate/quantum), read once per open —
-  // switching output devices mid-open shows stale numbers until reopened.
+  // dB/kHz/ms readout, EasyEffects-style. dB is sink volume math, so it tracks
+  // the slider live. kHz + ms are the graph clock (rate/quantum) from
+  // pw-metadata, re-read on open and on sink change — they only move when the
+  // graph reconfigures (new device, rate switch), so polling would be waste.
   property real clockRate: 0
   property real clockQuantum: 0
   readonly property string sinkDb: !sink || !sink.audio || sink.audio.muted || outputVolume <= 0.0001
@@ -163,10 +169,15 @@ BarWidget {
       + (clockQuantum / clockRate * 1000).toFixed(1) + " ms · " + sinkDb
     : sinkDb
 
+  function refreshClock() {
+    pwMeta.running = false
+    pwMeta.running = true
+  }
+
   Process {
     id: pwMeta
     command: ["sh", "-c", "pw-metadata -n settings 2>/dev/null || true"]
-    running: root.popoutOpen
+    running: false
     stdout: SplitParser {
       onRead: function(line) {
         var m = String(line).match(/key:'clock\.rate' value:'(\d+)'/)
