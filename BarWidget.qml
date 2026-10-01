@@ -5,7 +5,9 @@ import Quickshell.Services.Pipewire
 import qs.Commons
 import qs.Ui
 
-// System-wide audio visualizer for the Omarchy bar.
+// Omarchy bar audio popout: cava spectrum in the bar, and a click for the
+// full audio panel — sink volume, players, recording inputs and capture
+// streams, EasyEffects presets/bypass, spectrum, kHz/ms/dB readout.
 // Spawns cava in raw mode (one space-separated line of 0..32767 per frame on
 // stdout) and draws the values as animated bars in the theme foreground color.
 // Click (or scroll over it) opens a popout: default-sink volume slider, mute,
@@ -14,12 +16,9 @@ import qs.Ui
 // ponytail: fixed 20 bars / live bars per Repeater index lookup — no delegate
 // churn per frame; upgrade to smoother interpolation/fps only if it flickers.
 
-Item {
+BarWidget {
   id: root
-
-  property var bar
-  property string moduleName
-  property var settings
+  moduleName: "Theartifact369.audio-popout"
 
   property int barCount: 20
   property int barWidth: 3

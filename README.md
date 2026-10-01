@@ -1,7 +1,8 @@
-# omarchy-cava-popout
+# omarchy-audio-popout
 
-A [cava](https://github.com/karlstav/cava) audio visualizer module for the
-[Omarchy](https://omarchy.org) shell's bar, with a click-open popout:
+An [Omarchy](https://omarchy.org) bar plugin: a
+[cava](https://github.com/karlstav/cava) audio visualizer in the bar, and a
+click for the full audio panel.
 
 - **Volume slider** for the default sink (drag, wheel; right-click mutes)
 - **Per-app volume** — every connected app stream gets a slider + mute row,
@@ -23,20 +24,23 @@ A [cava](https://github.com/karlstav/cava) audio visualizer module for the
 
 ## Requirements
 
-- Omarchy (or any Quickshell setup exposing the `qs.Ui` / `qs.Commons`
-  modules and the bar module API)
+- Omarchy with shell plugin support
 - `cava`
-- `easyeffects` (optional — only for the EQ button)
+- `easyeffects` (optional — only for the EQ controls)
+- `pw-metadata` (PipeWire, ships with pipewire) for the kHz/ms readout
 
 ## Install
 
-Copy the three files into the Omarchy bar modules directory:
-
 ```bash
-cp cava.qml cava.conf cava-popout.conf ~/.config/omarchy/bar/modules/
+omarchy plugin add https://github.com/Theartifact369/omarchy-audio-popout.git --enable --yes
 ```
 
-Install the EQ TUI (optional, needs Python 3.11+):
+The widget lands in the bar's right section. Click the visualizer to open the
+popout. Tune bar count, framerate and autosens in `cava.conf` (bar) and
+`cava-popout.conf` (popout spectrum) inside the installed plugin directory.
+
+Install the EQ TUI separately if you want the **EQ TUI** button (needs
+Python 3.11+):
 
 ```bash
 install -Dm755 omarchy-eq ~/.local/bin/omarchy-eq
@@ -46,7 +50,7 @@ Add the module to a bar section in `~/.config/omarchy/shell.json`:
 
 ```json
 "right": [
-  { "id": "cava", "type": "qml" }
+  { "id": "Theartifact369.audio-popout" }
 ]
 ```
 
@@ -55,9 +59,6 @@ Then restart the shell:
 ```bash
 omarchy restart shell
 ```
-
-Click the visualizer to open the popout. Tune bar count, framerate and
-autosens in `cava.conf` (bar) and `cava-popout.conf` (popout spectrum).
 
 ## omarchy-eq TUI
 

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "Theartifact369.audio-popout",
+  "name": "Audio Popout",
+  "version": "1.0.0",
+  "author": "Theartifact369",
+  "license": "MIT",
+  "description": "Cava spectrum in the Omarchy bar, with a click-open audio popout: sink volume, players, recording inputs and capture streams, EasyEffects presets and bypass, spectrum, and a kHz/ms/dB readout.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Audio Popout",
+    "description": "Cava visualizer plus a full audio panel popout",
+    "category": "Audio",
+    "aliases": ["cava", "audio", "equalizer", "eq", "spectrum", "visualizer"],
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
