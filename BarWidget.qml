@@ -140,6 +140,8 @@ BarWidget {
     if (popoutOpen) {
       refreshStreams()
       refreshClock()
+      peakLeft = -99
+      peakRight = -99
     } else {
       displaySections = []
     }
@@ -155,23 +157,85 @@ BarWidget {
     objects: root.trackedStreams
   }
 
-  // dB/kHz/ms readout, EasyEffects-style. dB is sink volume math, so it tracks
-  // the slider live. kHz + ms are the graph clock (rate/quantum) from
-  // pw-metadata, re-read on open and on sink change — they only move when the
-  // graph reconfigures (new device, rate switch), so polling would be waste.
+  // Status readout, picked up the way EasyEffects picks it up:
+  //   kHz / ms — the rate and latency of the stream that is actually playing,
+  //     from the tracked node's own `node.rate` ("1/48000") and `node.latency`
+  //     ("3600/48000") properties, so they follow the audio as it changes.
+  //     Idle fallback is the graph clock (rate/quantum) from pw-metadata.
+  //   dB — live L/R peak of what reaches the sink (ffmpeg astats on the default
+  //     sink monitor, which is post-EasyEffects: the same signal EE's own
+  //     output-level nodes measure). Not sink volume — that is a setting, not a
+  //     level.
   property real clockRate: 0
   property real clockQuantum: 0
-  readonly property string sinkDb: !sink || !sink.audio || sink.audio.muted || outputVolume <= 0.0001
-    ? "-∞ dB"
-    : (20 * Math.log(outputVolume) / Math.LN10).toFixed(1) + " dB"
-  readonly property string clockStats: clockRate > 0
-    ? (clockRate / 1000).toFixed(1) + " kHz · "
-      + (clockQuantum / clockRate * 1000).toFixed(1) + " ms · " + sinkDb
-    : sinkDb
+  property real peakLeft: -99
+  property real peakRight: -99
+
+  function fracFramesPerSecond(prop) {
+    var s = String(prop || ""), i = s.indexOf("/")
+    if (i < 0) return 0
+    var n = Number(s.slice(0, i)), d = Number(s.slice(i + 1))
+    return n > 0 && d > 0 ? d / n : 0
+  }
+
+  function fracLatencyMs(prop) {
+    var s = String(prop || ""), i = s.indexOf("/")
+    if (i < 0) return 0
+    var frames = Number(s.slice(0, i)), rate = Number(s.slice(i + 1))
+    return frames > 0 && rate > 0 ? frames / rate * 1000 : 0
+  }
+
+  // The playing output stream: an output stream whose latency PipeWire has
+  // published (paused/idle streams drop it). First match wins.
+  readonly property var playingStream: {
+    var list = root.trackedStreams
+    for (var i = 0; i < list.length; i++) {
+      var n = list[i]
+      var p = (n && n.ready && n.properties) ? n.properties : {}
+      if (String(p["media.class"] || "").indexOf("Stream/Output") !== 0) continue
+      if (p["node.latency"]) return n
+    }
+    return null
+  }
+  readonly property var playingProps: playingStream ? (playingStream.properties || {}) : {}
+  readonly property real streamRate: fracFramesPerSecond(playingProps["node.rate"])
+  readonly property real streamLatencyMs: fracLatencyMs(playingProps["node.latency"])
+
+  readonly property string clockStats: {
+    var hz = streamRate > 0 ? streamRate : clockRate
+    var ms = streamLatencyMs > 0 ? streamLatencyMs
+      : (clockRate > 0 ? clockQuantum / clockRate * 1000 : 0)
+    var level = Math.round(peakLeft) + " " + Math.round(peakRight)
+    return hz > 0 ? (hz / 1000).toFixed(1) + " kHz · " + ms.toFixed(1) + " ms · " + level + " dB"
+      : level + " dB"
+  }
 
   function refreshClock() {
     pwMeta.running = false
     pwMeta.running = true
+  }
+
+  Process {
+    id: levelProc
+    // astats emits "…Peak_level=<dBFS>" per window on stdout. The monitor name
+    // follows the default sink, so switching devices needs no restart.
+    command: ["ffmpeg", "-hide_banner", "-loglevel", "error",
+      "-f", "pulse", "-i", "@DEFAULT_SINK@.monitor", "-ac", "2",
+      "-af", "astats=metadata=1:reset=48,"
+        + "ametadata=print:key=lavfi.astats.1.Peak_level:file=-,"
+        + "ametadata=print:key=lavfi.astats.2.Peak_level:file=-",
+      "-f", "null", "-"]
+    running: root.popoutOpen
+    stdout: SplitParser {
+      onRead: function(line) {
+        var l = String(line)
+        var m1 = l.match(/astats\.1\.Peak_level=(-?[\d.]+)/)
+        if (m1) root.peakLeft = Number(m1[1])
+        var m2 = l.match(/astats\.2\.Peak_level=(-?[\d.]+)/)
+        if (m2) root.peakRight = Number(m2[1])
+      }
+    }
+    onExited: if (code !== 0 && root.popoutOpen) levelProc.running = true
   }
 
   Process {
@@ -723,7 +787,8 @@ BarWidget {
         }
       }
 
-      // EasyEffects-style status readout, bottom-right: kHz · ms · dB.
+      // EasyEffects-style status readout, bottom-right: rate · latency · L/R
+      // level, all read from the graph the same way EE reads its own.
       Text {
         textFormat: Text.PlainText
         width: parent.width
